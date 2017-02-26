@@ -24,11 +24,14 @@ class DataLoader():
         stroke_dir = self.data_dir + "/lineStrokes"
         ascii_dir = self.data_dir + "/ascii"
 
-        if not (os.path.exists(data_file)) :
-            self.logger.write("\tcreating training data cpkl file from raw source")
-            self.preprocess(stroke_dir, ascii_dir, data_file)
+        if args.data_template is not None:
+            self.load_preprocessed_train_test(args.data_template)
+        else:
+            if not (os.path.exists(data_file)) :
+                self.logger.write("\tcreating training data cpkl file from raw source")
+                self.preprocess(stroke_dir, ascii_dir, data_file)
 
-        self.load_preprocessed(data_file)
+            self.load_preprocessed(data_file)
         self.reset_batch_pointer()
 
     def preprocess(self, stroke_dir, ascii_dir, data_file):
@@ -169,6 +172,70 @@ class DataLoader():
         f.close()
         self.logger.write("\tfinished parsing dataset. saved {} lines".format(len(strokes)))
 
+    def load_preprocessed_train_test(self, data_template):
+        data_file = data_template.format("train")
+        f = open(data_file,"rb")
+        [metadata, raw_stroke_data_train, raw_ascii_data_train] = pickle.load(f)
+        f.close()
+        self.alphabet = metadata['alphabet']
+        self.stroke_length = metadata['stroke_length']
+        self.ascii_length = metadata['ascii_length']
+        self.tsteps = self.stroke_length
+        self.ascii_steps = self.ascii_length
+
+        data_file = data_template.format("test")
+        f = open(data_file,"rb")
+        [_, raw_stroke_data_test, raw_ascii_data_test] = pickle.load(f)
+        f.close()
+
+        # goes thru the list, and only keeps the text entries that have more than tsteps points
+        self.stroke_data = []
+        self.ascii_data = []
+        self.valid_stroke_data = []
+        self.valid_ascii_data = []
+        counter = 0
+        num_training_chars = 0
+        num_valid_chars = 0
+
+        for i in range(len(raw_stroke_data_train)):
+            data = raw_stroke_data_train[i]
+            # print("COMPARE {} and {}".format(len(data), (self.tsteps+2)))
+            if len(data) == self.tsteps:
+            # if len(data) > (self.tsteps+2):
+                # removes large gaps from the data
+                data = np.minimum(data, self.limit)
+                data = np.maximum(data, -self.limit)
+                data = np.array(data,dtype=np.float32)
+                data[:,0:2] /= self.data_scale
+                cur_ascii = raw_ascii_data_train[i]
+                self.stroke_data.append(data)
+                self.ascii_data.append(cur_ascii)
+                num_training_chars += len(cur_ascii.translate(None, '_'))
+
+        for i in range(len(raw_stroke_data_test)):
+            data = raw_stroke_data_test[i]
+            # print("COMPARE {} and {}".format(len(data), (self.tsteps+2)))
+            if len(data) == self.tsteps:
+            # if len(data) > (self.tsteps+2):
+                # removes large gaps from the data
+                data = np.minimum(data, self.limit)
+                data = np.maximum(data, -self.limit)
+                data = np.array(data,dtype=np.float32)
+                data[:,0:2] /= self.data_scale
+                cur_ascii = raw_ascii_data_test[i]
+                self.valid_stroke_data.append(data)
+                self.valid_ascii_data.append(cur_ascii)
+                num_valid_chars += len(cur_ascii.translate(None, '_'))
+
+        # minus 1, since we want the ydata to be a shifted version of x data
+        self.num_batches = int(len(self.stroke_data) / self.batch_size)
+        self.logger.write("\tloaded dataset:")
+        self.logger.write("\t\t{} stroke length".format(self.stroke_length))
+        self.logger.write("\t\t{} ascii length".format(self.ascii_length))
+        self.logger.write("\t\t{} alphabet length".format(len(self.alphabet)))
+        self.logger.write("\t\t{} train characters over {} sequences".format(num_training_chars, len(self.stroke_data)))
+        self.logger.write("\t\t{} valid characters over {} sequences".format(num_valid_chars, len(self.valid_stroke_data)))
+        self.logger.write("\t\t{} training batches".format(self.num_batches))
 
     def load_preprocessed(self, data_file):
         f = open(data_file,"rb")

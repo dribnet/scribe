@@ -32,7 +32,7 @@ class Model():
 		self.graves_initializer = tf.truncated_normal_initializer(mean=0., stddev=.075, seed=None, dtype=tf.float32)
 		self.window_b_initializer = tf.truncated_normal_initializer(mean=-3.0, stddev=.25, seed=None, dtype=tf.float32) # hacky initialization
 
-		self.logger.write('\tusing alphabet{}'.format(self.alphabet))
+		self.logger.write('\tusing alphabet: {}'.format(self.alphabet))
 		self.char_vec_len = len(self.alphabet) + 1 #plus one for <UNK> token
 		# self.ascii_steps = args.tsteps/args.tsteps_per_ascii
 		self.ascii_steps = dataloader.ascii_steps

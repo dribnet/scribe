@@ -42,6 +42,8 @@ def main():
 	parser.add_argument('--data_scale', type=int, default=50, help='amount to scale data down before training')
 	parser.add_argument('--log_dir', type=str, default='../public_html/', help='location, relative to execution, of log files')
 	parser.add_argument('--data_dir', type=str, default='./data', help='location, relative to execution, of data')
+	# parser.add_argument('--data_template', type=str, default='data/mnist_strokes_{}.cpkl', help='location of pickled training data')
+	parser.add_argument('--data_template', type=str, default=None, help='location of pickled training data')
 	parser.add_argument('--save_path', type=str, default='models/model.ckpt', help='location to save model')
 	parser.add_argument('--save_every', type=int, default=500, help='number of batches between each save')
 
@@ -59,17 +61,17 @@ def main():
 	logger.write("loading data...")
 	data_loader = DataLoader(args, logger=logger)
 	
+	if args.train:
+		train_model(args, logger, data_loader)
+	else:
+		sample_model(args, logger, data_loader)
+
+def train_model(args, logger, data_loader):
+	logger.write("\nTRAINING MODE...")
+
 	logger.write("building model...")
-	# temporary hack until we can refactor
 	model = Model(args, data_loader, logger=logger)
 
-	if args.train:
-		train_model(args, logger, data_loader, model)
-	else:
-		sample_model(args, logger, data_loader, model)
-
-def train_model(args, logger, data_loader, model):
-	logger.write("\nTRAINING MODE...")
 	logger.write("attempt to load saved model...")
 	load_was_success, global_step = model.try_load_model(args.save_path)
 
@@ -114,39 +116,41 @@ def train_model(args, logger, data_loader, model):
 			if i % 10 is 0: logger.write("{}/{}, loss = {:.3f}, regloss = {:.5f}, valid_loss = {:.3f}, time = {:.3f}" \
 				.format(i, args.nepochs * args.nbatches, train_loss, running_average, valid_loss, end - start) )
 
-def sample_model(args, logger, data_loader, model):
+def sample_model(args, logger, data_loader):
 	logger.write("\nSAMPLING MODE...")
 
 	if args.text == '':
 		strings = ['call me ishmael some years ago', 'A project by Sam Greydanus', 'mmm mmm mmm mmm mmm mmm mmm', \
 			'What I cannot create I do not understand', 'You know nothing Jon Snow'] # test strings
 	else:
-		strings = [args.text]
+		strings = args.text.split(",")
 
-	logger.write("attempt to load saved model...")
-	load_was_success, global_step = model.try_load_model(args.save_path)
+	while True:
+		logger.write("building model...")
+		model = Model(args, data_loader, logger=logger)
 
-	if load_was_success:
-		for s in strings:
-			strokes, phis, windows, kappas = sample(s, model, args, data_loader)
+		logger.write("attempt to load saved model...")
+		load_was_success, global_step = model.try_load_model(args.save_path)
 
-			w_save_path = '{}figures/iter-{}-w-{}'.format(args.log_dir, global_step, s[:10].replace(' ', '_'))
-			g_save_path = '{}figures/iter-{}-g-{}'.format(args.log_dir, global_step, s[:10].replace(' ', '_'))
-			l_save_path = '{}figures/iter-{}-l-{}'.format(args.log_dir, global_step, s[:10].replace(' ', '_'))
+		if load_was_success:
+			for s in strings:
+				strokes, phis, windows, kappas = sample(s, model, args, data_loader)
 
-			window_plots(phis, windows, save_path=w_save_path)
-			gauss_plot(strokes, 'Heatmap for "{}"'.format(s), figsize = (2*len(s),4), save_path=g_save_path)
-			line_plot(strokes, 'Line plot for "{}"'.format(s), figsize = (len(s),2), save_path=l_save_path)
+				w_save_path = '{}figures/iter-{}-w-{}'.format(args.log_dir, global_step, s[:10].replace(' ', '_'))
+				g_save_path = '{}figures/iter-{}-g-{}'.format(args.log_dir, global_step, s[:10].replace(' ', '_'))
+				l_save_path = '{}figures/iter-{}-l-{}'.format(args.log_dir, global_step, s[:10].replace(' ', '_'))
 
-			# make sure that kappas are reasonable
-			logger.write( "kappas: \n{}".format(str(kappas[min(kappas.shape[0]-1, args.tsteps_per_ascii),:])) )
-	else:
-		logger.write("load failed, sampling canceled")
+				window_plots(phis, windows, save_path=w_save_path)
+				gauss_plot(strokes, 'Heatmap for "{}"'.format(s), figsize = (2*len(s),4), save_path=g_save_path)
+				line_plot(strokes, 'Line plot for "{}"'.format(s), figsize = (len(s),2), save_path=l_save_path)
 
-	if True:
+				# make sure that kappas are reasonable
+				logger.write( "kappas: \n{}".format(str(kappas[min(kappas.shape[0]-1, args.tsteps_per_ascii),:])) )
+		else:
+			logger.write("load failed, sampling canceled")
+
 		tf.reset_default_graph()
 		time.sleep(args.sleep_time)
-		sample_model(args, logger=logger)
 
 if __name__ == '__main__':
 	main()
