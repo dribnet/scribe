@@ -128,7 +128,7 @@ def sample_model(args, logger, data_loader, model):
 
 	if load_was_success:
 		for s in strings:
-			strokes, phis, windows, kappas = sample(s, model, args)
+			strokes, phis, windows, kappas = sample(s, model, args, data_loader)
 
 			w_save_path = '{}figures/iter-{}-w-{}'.format(args.log_dir, global_step, s[:10].replace(' ', '_'))
 			g_save_path = '{}figures/iter-{}-g-{}'.format(args.log_dir, global_step, s[:10].replace(' ', '_'))
